@@ -89,6 +89,7 @@ def on_disconnect():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', engineio_logger=False)
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent_uwsgi')
+
 
 
