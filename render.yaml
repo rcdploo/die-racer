@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: die-racer-arena
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: WORDNIK_API_KEY
+        sync: false          # You'll enter this manually in the Render dashboard
+      - key: SECRET_KEY
+        generateValue: true  # Render auto-generates a secure random value
+      - key: STATS_PATH
+        value: /data/stats.json
+    disk:
+      name: game-data
+      mountPath: /data
+      sizeGB: 1              # Smallest available — plenty for stats.json

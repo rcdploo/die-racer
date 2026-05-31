@@ -3,11 +3,11 @@ import time
 import sys
 import json
 import urllib.request
-import json
+import os
 
 game_len = 7
 
-#into--put text up while APIs load
+#intro - put text up while APIs load
 print("Laaaaaadies aaaaand Geeeentlmen..... Welcome to DIE-RACER ARENA\n")
 print("Hold on to your hats because do we have some exciting races for you tonight!\n")
 print("Prepare to be entertained by all the die-based horsepower YOU. CAN. HANDLE.\n")
@@ -15,10 +15,11 @@ print("Your $10 entry will let you bet on up to "+str(game_len)+" races... if yo
 print("Let's see if today is your lucky day!\n")
 
 #get word lists
-url = urllib.request.urlopen("http://api.wordnik.com/v4/words.json/randomWords?api_key=iodw5ezxg3dgfuuh33p4idggzs8fjwnkgwwpgrh54vzym3wh0&includePartOfSpeech=adjective&minCorpusCount=10000")
+api_key = os.environ.get("WORDNIK_API_KEY")
+url = urllib.request.urlopen("https://api.wordnik.com/v4/words.json/randomWords?api_key="+api_key+"&includePartOfSpeech=adjective&minCorpusCount=10000")
 adjectives = json.loads(url.read())
 
-url = urllib.request.urlopen("http://api.wordnik.com/v4/words.json/randomWords?api_key=iodw5ezxg3dgfuuh33p4idggzs8fjwnkgwwpgrh54vzym3wh0&includePartOfSpeech=noun&minCorpusCount=10000")
+url = urllib.request.urlopen("https://api.wordnik.com/v4/words.json/randomWords?api_key="+api_key+"&includePartOfSpeech=noun&minCorpusCount=10000")
 nouns = json.loads(url.read())
 
 #set up functions used within races
@@ -57,8 +58,6 @@ def roll(die):
   #show initial roll
   print(die.name, " rolls!")
   time.sleep(0.5)
-
-  
 
   if die.power['name'] == "Doubles" and dx==dy:
     print([dx],[dy])
@@ -239,7 +238,6 @@ def race():
   print("\n")
 
   #final leg text
-
   if dist1 > dist2:
     if start1 <= start2:
       print(die1.name+" with the come-from-behind victory!\n")
@@ -289,8 +287,6 @@ def race():
   race_num += 1
   max_bet += race_num
 
- 
-
 
 #game starts here
 diepowers = [
@@ -309,7 +305,7 @@ max_bet=3
 bankroll = 10
 race_num = 0
 
-for i in range (0,game_len):
+for i in range(0, game_len):
   race()
 
   #reset dice
@@ -329,10 +325,16 @@ for i in range (0,game_len):
 print("You finished the day with $"+str(bankroll)+"\n")
 print("GAME OVER")
 
+# Stats file path - use /data/ on Render (persistent disk), fallback to local
+STATS_PATH = os.environ.get("STATS_PATH", "stats.json")
+
 #open and update stats file
-stats = open("stats.json")
-js = json.load(stats)
-stats.close()
+try:
+  with open(STATS_PATH) as stats:
+    js = json.load(stats)
+except FileNotFoundError:
+  js = {"num_plays": 0, "tot_score": 0, "highscore1": 0, "highscore2": 0, "highscore3": 0,
+        "highscore1_name": "---", "highscore2_name": "---", "highscore3_name": "---"}
 
 js['num_plays'] += 1
 js['tot_score'] += bankroll
@@ -342,9 +344,9 @@ if bankroll > js['highscore3']:
   print('You got a high score!\n')
   time.sleep(1)
   hs_name = ''
-  while len(hs_name) != 4 and hs_name.isalnum() != True:
+  while len(hs_name) != 4 or not hs_name.isalnum():
     hs_name = input("Enter your name (4 chars): _ _ _ _\n")
-    if len(hs_name) != 4 and hs_name.isalnum() != True:
+    if len(hs_name) != 4 or not hs_name.isalnum():
       print("Enter exactly 4 alphanumeric characters\n")
 
   if bankroll > js['highscore1']:
@@ -371,8 +373,8 @@ print(js['highscore1'],js['highscore1_name'])
 print(js['highscore2'],js['highscore2_name'])
 print(js['highscore3'],js['highscore3_name'])
 
-print("\nAVG SCORE: "+str(js['tot_score']/js['num_plays']))
+print("\nAVG SCORE: "+str(round(js['tot_score']/js['num_plays'], 2)))
 
-#write back updates and close the file
-with open('stats.json', 'w') as outfile:
+#write back updates
+with open(STATS_PATH, 'w') as outfile:
     json.dump(js, outfile)
