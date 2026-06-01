@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DIE-RACER ARENA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Boogaloo&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+  <style>
+    :root {
+      --amber: #ffb000;
+      --amber-dim: #7a5500;
+      --amber-glow: #ffcc44;
+      --bg: #0a0800;
+      --bg2: #110e00;
+      --border: #3a2e00;
+      --red: #ff4422;
+      --green: #44ff88;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--amber);
+      font-family: 'Share Tech Mono', monospace;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    /* Scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
+      );
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    /* Vignette + flicker */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.6) 100%);
+      pointer-events: none;
+      z-index: 99;
+      animation: flicker 8s infinite;
+    }
+
+    @keyframes flicker {
+      0%,94%,95.5%,97%,100% { opacity: 1; }
+      94.5% { opacity: 0.85; }
+      96% { opacity: 0.9; }
+    }
+
+    header {
+      width: 100%;
+      max-width: 900px;
+      padding: 14px 20px 10px;
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .logo {
+      font-family: 'Boogaloo', cursive;
+      font-size: 1.8rem;
+      color: var(--amber-glow);
+      text-shadow: 0 0 12px var(--amber), 0 0 30px var(--amber-dim);
+      white-space: nowrap;
+    }
+    .logo span { color: var(--red); text-shadow: 0 0 12px var(--red); }
+
+    .tagline {
+      font-size: 0.65rem;
+      color: var(--amber-dim);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .status-bar {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s infinite;
+    }
+    .status-dot.dead { background: var(--red); box-shadow: 0 0 6px var(--red); animation: none; }
+
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    #status-text { color: var(--amber-dim); }
+
+    .terminal-wrapper {
+      width: 100%;
+      max-width: 900px;
+      flex: 1;
+      padding: 10px 16px 6px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #output {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg2);
+      padding: 12px 14px;
+      box-shadow: 0 0 20px rgba(255,176,0,0.06), inset 0 0 30px rgba(0,0,0,0.4);
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 0;
+    }
+
+    /* Scrollbar */
+    #output::-webkit-scrollbar { width: 6px; }
+    #output::-webkit-scrollbar-track { background: var(--bg2); }
+    #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .input-row {
+      width: 100%;
+      max-width: 900px;
+      padding: 6px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .prompt-char {
+      color: var(--amber-glow);
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    #user-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid var(--amber-dim);
+      color: var(--amber-glow);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      outline: none;
+      padding: 2px 4px;
+      caret-color: var(--amber-glow);
+    }
+
+    #user-input:focus { border-bottom-color: var(--amber); }
+
+    #btn-send {
+      background: none;
+      border: 1px solid var(--amber-dim);
+      color: var(--amber-dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      padding: 4px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+    #btn-send:hover { border-color: var(--amber); color: var(--amber); }
+
+    footer {
+      width: 100%;
+      max-width: 900px;
+      padding: 6px 20px 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.62rem;
+      color: var(--amber-dim);
+      letter-spacing: 0.08em;
+      flex-shrink: 0;
+    }
+
+    .btn-restart {
+      background: none;
+      border: 1px solid var(--amber-dim);
+      color: var(--amber-dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      padding: 3px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+    }
+    .btn-restart:hover { border-color: var(--amber); color: var(--amber); }
+
+    /* Overlay */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      flex-direction: column;
+      gap: 18px;
+    }
+    #overlay.hidden { display: none; }
+
+    .overlay-title {
+      font-family: 'Boogaloo', cursive;
+      font-size: 3.2rem;
+      color: var(--amber-glow);
+      text-shadow: 0 0 20px var(--amber), 0 0 60px var(--amber-dim);
+      text-align: center;
+      line-height: 1.1;
+    }
+    .overlay-title span { color: var(--red); text-shadow: 0 0 20px var(--red); }
+
+    .overlay-sub {
+      font-size: 0.75rem;
+      color: var(--amber-dim);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+    }
+
+    .ascii-art {
+      font-size: 0.65rem;
+      color: var(--amber-dim);
+      text-align: center;
+      white-space: pre;
+    }
+
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+    .btn-start {
+      background: none;
+      border: 2px solid var(--amber);
+      color: var(--amber);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1rem;
+      letter-spacing: 0.25em;
+      padding: 12px 36px;
+      cursor: pointer;
+      text-transform: uppercase;
+      margin-top: 10px;
+      box-shadow: 0 0 16px var(--amber-dim);
+      animation: blink 1.2s step-end infinite;
+      transition: all 0.15s;
+    }
+    .btn-start:hover {
+      background: var(--amber);
+      color: var(--bg);
+      animation: none;
+      box-shadow: 0 0 30px var(--amber);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="overlay">
+    <div class="ascii-art">~\_DR_>  @@[DR]>  =}(DR)>  8>{DR}></div>
+    <div class="overlay-title">DIE-RACER<br><span>ARENA</span></div>
+    <div class="overlay-sub">place your bets &bull; roll the dice &bull; glory awaits</div>
+    <button class="btn-start" id="btn-start">INSERT COIN</button>
+  </div>
+
+  <header>
+    <div class="logo">DIE-RACER <span>ARENA</span></div>
+    <div class="tagline">die-based horsepower</div>
+    <div class="status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">CONNECTING...</span>
+    </div>
+  </header>
+
+  <div class="terminal-wrapper">
+    <div id="output"></div>
+  </div>
+
+  <div class="input-row">
+    <span class="prompt-char">&gt;</span>
+    <input type="text" id="user-input" autocomplete="off" autocorrect="off"
+           autocapitalize="off" spellcheck="false" placeholder="type here and press Enter...">
+    <button id="btn-send">Send</button>
+  </div>
+
+  <footer>
+    <span>Type 1 or 2 to pick &nbsp;|&nbsp; Y or N to respond &nbsp;|&nbsp; Enter to submit</span>
+    <button class="btn-restart" id="btn-restart">↺ NEW GAME</button>
+  </footer>
+
+  <script>
+    const socket = io();
+    const overlay = document.getElementById('overlay');
+    const btnStart = document.getElementById('btn-start');
+    const btnRestart = document.getElementById('btn-restart');
+    const btnSend = document.getElementById('btn-send');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const output = document.getElementById('output');
+    const userInput = document.getElementById('user-input');
+
+    function appendOutput(text) {
+      // Strip backspace-based animation chars that don't render in a div
+      text = text.replace(/[^\x20-\x7E\n\r\t]/g, '');
+      output.textContent += text;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    socket.on('output', (data) => appendOutput(data.data));
+
+    socket.on('game_over', () => {
+      statusDot.classList.add('dead');
+      statusText.textContent = 'GAME OVER';
+      appendOutput('\n\n[ Game over — press NEW GAME to play again ]\n');
+      userInput.disabled = true;
+      btnSend.disabled = true;
+    });
+
+    socket.on('connect', () => {
+      statusDot.classList.remove('dead');
+      statusText.textContent = 'CONNECTED';
+    });
+
+    socket.on('connect_error', (err) => {
+      statusDot.classList.add('dead');
+      statusText.textContent = 'ERR: ' + err.message;
+    });
+
+    socket.on('disconnect', (reason) => {
+      statusDot.classList.add('dead');
+      statusText.textContent = 'DISCONNECTED';
+    });
+
+    function sendInput() {
+      const val = userInput.value;
+      userInput.value = '';
+      appendOutput(val + '\n');
+      // Send each character then a newline, mimicking terminal input
+      for (const ch of val) {
+        socket.emit('input', { key: ch });
+      }
+      socket.emit('input', { key: '\r' });
+    }
+
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendInput();
+    });
+    btnSend.addEventListener('click', sendInput);
+
+    btnStart.addEventListener('click', () => {
+      overlay.classList.add('hidden');
+      userInput.focus();
+    });
+
+    btnRestart.addEventListener('click', () => window.location.reload());
+  </script>
+</body>
+</html>

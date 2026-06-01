@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: die-racer-arena
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --worker-class eventlet -w 1 app:app
+    envVars:
+      - key: WORDNIK_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: STATS_PATH
+        value: /data/stats.json
+    disk:
+      name: game-data
+      mountPath: /data
+      sizeGB: 1
