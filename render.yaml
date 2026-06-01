@@ -2,16 +2,24 @@ services:
   - type: web
     name: die-racer-arena
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    buildCommand: |
+      pip install -r requirements.txt
+      mkdir -p static
+      pip install nodeenv
+      pip download xterm --no-deps -d /tmp/xterm || true
+      curl -o static/xterm.min.js https://unpkg.com/xterm@5.3.0/lib/xterm.js
+      curl -o static/xterm.min.css https://unpkg.com/xterm@5.3.0/css/xterm.css
+      curl -o static/addon-fit.min.js https://unpkg.com/@xterm/addon-fit@0.10.0/lib/addon-fit.js
+    startCommand: gunicorn --worker-class eventlet -w 1 app:app
     envVars:
       - key: WORDNIK_API_KEY
-        sync: false          # You'll enter this manually in the Render dashboard
+        sync: false
       - key: SECRET_KEY
-        generateValue: true  # Render auto-generates a secure random value
+        generateValue: true
       - key: STATS_PATH
         value: /data/stats.json
     disk:
       name: game-data
       mountPath: /data
-      sizeGB: 1              # Smallest available — plenty for stats.json
+      sizeGB: 1
+  
