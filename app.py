@@ -9,7 +9,7 @@ from flask_socketio import SocketIO
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'die-racer-secret')
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 GAME_SCRIPT = os.path.join(os.path.dirname(__file__), 'main.py')
 
