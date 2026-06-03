@@ -314,7 +314,7 @@ for i in range(0, game_len):
     {'name': 'Low3of4','desc':'Roll 4 dice, keep the 3 lowest'},
     {'name': 'Highest','desc':'Rounds lower die up to higher'}
   ]
-  dieshapes = ["~\_XX_>","@@[XX]>","=}(XX)>","8>{XX}>"]
+  dieshapes = ["~\\_XX_>","@@[XX]>","=}(XX)>","8>{XX}>"]
   random.shuffle(dieshapes)
 
   if bankroll <= race_num:
