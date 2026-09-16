@@ -1,11 +1,14 @@
 import os
-import pty
 import subprocess
 import threading
-import select
+import sys
 import flask
 from flask import Flask, render_template
 from flask_socketio import SocketIO
+
+if os.name != 'nt':
+    import pty
+    import select
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'die-racer-secret')
@@ -21,6 +24,32 @@ def index():
 def on_connect():
     """Start the game process when a player connects."""
     sid = flask.request.sid
+    app.sessions = getattr(app, 'sessions', {})
+
+    if os.name == 'nt':
+        proc = subprocess.Popen(
+            [sys.executable, '-u', GAME_SCRIPT],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env={**os.environ.copy(), 'PYTHONUNBUFFERED': '1'}
+        )
+
+        app.sessions[sid] = {'proc': proc}
+
+        def read_output():
+            """Read game output and forward to browser."""
+            try:
+                for line in proc.stdout:
+                    socketio.emit('output', {'data': line}, to=sid)
+            finally:
+                socketio.emit('game_over', {}, to=sid)
+
+        thread = threading.Thread(target=read_output, daemon=True)
+        thread.start()
+        return
 
     # Create a pseudo-terminal so the game gets proper terminal I/O
     master_fd, slave_fd = pty.openpty()
@@ -29,7 +58,7 @@ def on_connect():
     env['PYTHONUNBUFFERED'] = '1'
 
     proc = subprocess.Popen(
-        ['python3', '-u', GAME_SCRIPT],
+        [sys.executable, '-u', GAME_SCRIPT],
         stdin=slave_fd,
         stdout=slave_fd,
         stderr=slave_fd,
@@ -39,8 +68,6 @@ def on_connect():
 
     os.close(slave_fd)
 
-    # Store per-session state
-    app.sessions = getattr(app, 'sessions', {})
     app.sessions[sid] = {'proc': proc, 'master_fd': master_fd}
 
     def read_output():
@@ -68,9 +95,15 @@ def on_input(data):
     sid = flask.request.sid
     sessions = getattr(app, 'sessions', {})
     if sid in sessions:
-        master_fd = sessions[sid]['master_fd']
         try:
-            os.write(master_fd, data['key'].encode('utf-8'))
+            if os.name == 'nt':
+                proc = sessions[sid]['proc']
+                proc.stdin.write(data['key'])
+                proc.stdin.flush()
+                socketio.emit('output', {'data': data['key'].replace('\r', '\n')}, to=sid)
+            else:
+                master_fd = sessions[sid]['master_fd']
+                os.write(master_fd, data['key'].encode('utf-8'))
         except OSError:
             pass
 
@@ -82,7 +115,8 @@ def on_disconnect():
     if sid in sessions:
         try:
             sessions[sid]['proc'].terminate()
-            os.close(sessions[sid]['master_fd'])
+            if 'master_fd' in sessions[sid]:
+                os.close(sessions[sid]['master_fd'])
         except Exception:
             pass
         del sessions[sid]

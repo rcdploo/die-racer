@@ -322,9 +322,12 @@
     const output = document.getElementById('output');
     const userInput = document.getElementById('user-input');
 
-    // Line-by-line reveal queue
+    // Arcade-style typewriter reveal queue
+    const CHAR_DELAY_MS = 18;
+    const LINE_DELAY_MS = 260;
     const lineQueue = [];
     let isRevealing = false;
+    let hasStarted = false;
     
     function revealNext() {
       if (lineQueue.length === 0) {
@@ -333,9 +336,23 @@
       }
       isRevealing = true;
       const line = lineQueue.shift();
-      output.textContent += line + '\n';
-      output.scrollTop = output.scrollHeight;
-      setTimeout(revealNext, 180); // delay between lines in ms — adjust to taste
+      let index = 0;
+
+      function typeChar() {
+        if (index < line.length) {
+          output.textContent += line[index];
+          index += 1;
+          output.scrollTop = output.scrollHeight;
+          setTimeout(typeChar, CHAR_DELAY_MS);
+          return;
+        }
+
+        output.textContent += '\n';
+        output.scrollTop = output.scrollHeight;
+        setTimeout(revealNext, LINE_DELAY_MS);
+      }
+
+      setTimeout(typeChar, line.length === 0 ? LINE_DELAY_MS : CHAR_DELAY_MS);
     }
     
     function appendOutput(text) {
@@ -347,7 +364,7 @@
           lineQueue.push(line);
         }
       }
-      if (!isRevealing) revealNext();
+      if (hasStarted && !isRevealing) revealNext();
     }
 
     socket.on('output', (data) => appendOutput(data.data));
@@ -378,7 +395,6 @@
     function sendInput() {
       const val = userInput.value;
       userInput.value = '';
-      appendOutput(val + '\n');
       // Send each character then a newline, mimicking terminal input
       for (const ch of val) {
         socket.emit('input', { key: ch });
@@ -393,6 +409,8 @@
 
     btnStart.addEventListener('click', () => {
       overlay.classList.add('hidden');
+      hasStarted = true;
+      if (!isRevealing) revealNext();
       userInput.focus();
     });
 
