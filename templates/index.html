@@ -322,11 +322,32 @@
     const output = document.getElementById('output');
     const userInput = document.getElementById('user-input');
 
-    function appendOutput(text) {
-      // Strip backspace-based animation chars that don't render in a div
-      text = text.replace(/[^\x20-\x7E\n\r\t]/g, '');
-      output.textContent += text;
+    // Line-by-line reveal queue
+    const lineQueue = [];
+    let isRevealing = false;
+    
+    function revealNext() {
+      if (lineQueue.length === 0) {
+        isRevealing = false;
+        return;
+      }
+      isRevealing = true;
+      const line = lineQueue.shift();
+      output.textContent += line + '\n';
       output.scrollTop = output.scrollHeight;
+      setTimeout(revealNext, 180); // delay between lines in ms — adjust to taste
+    }
+    
+    function appendOutput(text) {
+      // Strip non-printable chars
+      text = text.replace(/[^\x20-\x7E\n\r\t]/g, '');
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (line.trim() !== '' || lineQueue.length > 0) {
+          lineQueue.push(line);
+        }
+      }
+      if (!isRevealing) revealNext();
     }
 
     socket.on('output', (data) => appendOutput(data.data));
